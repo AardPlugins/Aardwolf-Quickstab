@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE muclient>
+<!-- MuClient version 5.07-pre -->
+
+<!-- Plugin "aardwolf_quickstab" - Auto-spiral after backstab when quickstab active -->
+
+<muclient>
+<plugin
+   name="aardwolf_quickstab"
+   author="deathr"
+   id="dbe24537029839d2e3bafacc"
+   language="Lua"
+   purpose="Auto-spiral after backstab when quickstab is active"
+   date_written="2025-12-25"
+   requires="5.07"
+   version="1.0"
+   save_state="y"
+   >
+
+</plugin>
+
+<include name="constants.lua"/>
+
+<!--  Timers  -->
+
+<timers>
+    <!-- Init timer - polls until we're in a valid game state -->
+    <timer
+        name="timer_init_plugin"
+        second="0.5"
+        active_closed="y"
+        script="timer_init_plugin"
+        enabled="y"
+        send_to="12">
+    </timer>
+</timers>
+
+<!--  Aliases  -->
+
+<aliases>
+    <alias
+        match="^qs(?: (.*))?$"
+        enabled="y"
+        regexp="y"
+        ignore_case="y"
+        sequence="100"
+        send_to="12"
+        script="alias_quickstab">
+    </alias>
+</aliases>
+
+<!--  Triggers  -->
+
+<triggers>
+
+    <!-- ================================================================
+         SLIST CAPTURE TRIGGERS (enabled during state refresh)
+         Query current quickstab state on plugin load/connect
+         ================================================================ -->
+
+    <!-- Start of slist output -->
+    <trigger
+        name="trigger_slist_start"
+        group="quickstab_slist"
+        enabled="n"
+        match="^\{spellheaders\}$"
+        regexp="y"
+        omit_from_output="y"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_slist_start">
+    </trigger>
+
+    <!-- Capture each skill line -->
+    <trigger
+        name="trigger_slist_line"
+        group="quickstab_slist"
+        enabled="n"
+        match="^(\d+),(.*),(\d+),(\d+),(\d+),([+-]?\d+),(\d+)$"
+        regexp="y"
+        omit_from_output="y"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_slist_line">
+    </trigger>
+
+    <!-- End of slist output -->
+    <trigger
+        name="trigger_slist_end"
+        group="quickstab_slist"
+        enabled="n"
+        match="^\{\/spellheaders\}$"
+        regexp="y"
+        omit_from_output="y"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_slist_end">
+    </trigger>
+
+    <!-- ================================================================
+         SPELLUP TAG TRIGGERS (always enabled)
+         Track quickstab activation via {affon}601 and {affoff}601
+         ================================================================ -->
+
+    <trigger
+        name="trigger_quickstab_on"
+        group="quickstab_spellup"
+        enabled="y"
+        match="^\{affon\}601,(\d+)"
+        regexp="y"
+        omit_from_output="y"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_quickstab_activated">
+    </trigger>
+
+    <trigger
+        name="trigger_quickstab_off"
+        group="quickstab_spellup"
+        enabled="y"
+        match="^\{affoff\}601$"
+        regexp="y"
+        omit_from_output="y"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_quickstab_deactivated">
+    </trigger>
+
+    <!-- ================================================================
+         BACKSTAB EXECUTION TRIGGERS (enabled when quickstab active)
+         Detect when backstab hits or misses
+         ================================================================ -->
+
+    <!-- Backstab hit: *[5] Your backstab does UNBELIEVABLE things to a mob! [13532] -->
+    <trigger
+        name="trigger_backstab_hit"
+        group="quickstab_backstab"
+        enabled="n"
+        match="^\*?\[\d+\] Your backstab .*! \[\d+\]$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_executed">
+    </trigger>
+
+    <!-- Backstab miss: Your backstab misses a mob. [0] -->
+    <trigger
+        name="trigger_backstab_miss"
+        group="quickstab_backstab"
+        enabled="n"
+        match="^Your backstab misses .+\. \[0\]$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_executed">
+    </trigger>
+
+    <!-- ================================================================
+         BACKSTAB FAILURE TRIGGERS (enabled when quickstab active)
+         ================================================================ -->
+
+    <!-- Second backstab refused - spiral immediately -->
+    <trigger
+        name="trigger_bs_fail_second"
+        group="quickstab_failures"
+        enabled="n"
+        match="^.+ refuses to be fooled by a second backstab\.$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_refused">
+    </trigger>
+
+    <!-- Target not here - check if fighting -->
+    <trigger
+        name="trigger_bs_fail_not_here"
+        group="quickstab_failures"
+        enabled="n"
+        match="^They aren't here\.$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_failed">
+    </trigger>
+
+    <!-- Already in combat - check if fighting -->
+    <trigger
+        name="trigger_bs_fail_in_combat"
+        group="quickstab_failures"
+        enabled="n"
+        match="^You are already in combat with .+\.$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_failed">
+    </trigger>
+
+    <!-- Too paranoid - check if fighting -->
+    <trigger
+        name="trigger_bs_fail_paranoid"
+        group="quickstab_failures"
+        enabled="n"
+        match="^.+ is too paranoid to sneak up on at the moment\.$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="100"
+        send_to="12"
+        script="trigger_backstab_failed">
+    </trigger>
+
+    <!-- ================================================================
+         DEATH DETECTION TRIGGERS (enabled in PENDING_SPIRAL state)
+         Cancel spiral if mob dies - patterns from consider plugin
+         ================================================================ -->
+
+    <!-- Backstab kill message - high priority -->
+    <trigger
+        name="trigger_death_backstab"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ lets out a final rasp as \w+ vital organs are pierced\. \w+ is DEAD!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Mental damage: mind destroyed -->
+    <trigger
+        name="trigger_death_mental"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ falls dead as \w+ mind is destroyed!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Project force -->
+    <trigger
+        name="trigger_death_project_force"
+        group="quickstab_death"
+        enabled="n"
+        match="^The mind force crushes .+ into a bloody pulp! \w+ is DEAD!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Voice of god -->
+    <trigger
+        name="trigger_death_voice_god"
+        group="quickstab_death"
+        enabled="n"
+        match="^The voice of god has cleansed .+ eternally! \w+ is DEAD!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Negative/drain damage -->
+    <trigger
+        name="trigger_death_drain"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ howls as \w+ last spark of life is drained!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Poison/death -->
+    <trigger
+        name="trigger_death_poison"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ turns deadly pale and collapses!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Acid damage -->
+    <trigger
+        name="trigger_death_acid"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ screams in agony as the acid consumes \w+!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Holy damage -->
+    <trigger
+        name="trigger_death_holy"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ is damned forever by the holy power!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Fire damage -->
+    <trigger
+        name="trigger_death_fire"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ screams as the flames engulf \w+!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Water damage -->
+    <trigger
+        name="trigger_death_water"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ is battered to death by the force of the water!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Bash damage -->
+    <trigger
+        name="trigger_death_bash"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ crumbles as \w+ is battered to death!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Electric/lightning damage -->
+    <trigger
+        name="trigger_death_electric"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ smoulders as the lightning destroys \w+!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Slash/pierce weapon -->
+    <trigger
+        name="trigger_death_weapon"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ is slain by a final .*!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="1"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Generic skill death (HESHE is DEAD!) -->
+    <trigger
+        name="trigger_death_skill"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ \w+ (?:is|are) DEAD!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="10"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+    <!-- Generic death message (is/are DEAD!!) -->
+    <trigger
+        name="trigger_death_generic"
+        group="quickstab_death"
+        enabled="n"
+        match="^.+ (?:is|are) DEAD!!$"
+        regexp="y"
+        omit_from_output="n"
+        keep_evaluating="y"
+        sequence="10"
+        send_to="12"
+        script="trigger_mob_died">
+    </trigger>
+
+</triggers>
+
+
+<!--  Script  -->
+
+
+<script>
+<![CDATA[
+dofile(GetPluginInfo(GetPluginID(), 20) .. "aardwolf_quickstab_init.lua")
+]]>
+</script>
+
+
+</muclient>
