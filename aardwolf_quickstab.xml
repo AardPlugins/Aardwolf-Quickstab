@@ -39,7 +39,7 @@
 
 <aliases>
     <alias
-        match="^qs(?: (.*))?$"
+        match="^qstab(?: (.*))?$"
         enabled="y"
         regexp="y"
         ignore_case="y"

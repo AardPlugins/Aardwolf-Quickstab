@@ -216,14 +216,14 @@ function cmd_help()
     Message([[@WQuickStab Plugin v]] .. PLUGIN_VERSION .. [[
 
 @WCommands:
-  @Yqs              @w- Show status
-  @Yqs on           @w- Enable plugin
-  @Yqs off          @w- Disable plugin
-  @Yqs status       @w- Show detailed status
-  @Yqs refresh      @w- Refresh quickstab state from slist
-  @Yqs debug        @w- Toggle debug mode
-  @Yqs reload       @w- Reload plugin
-  @Yqs help         @w- Show this help
+  @Yqstab           @w- Show status
+  @Yqstab on        @w- Enable plugin
+  @Yqstab off       @w- Disable plugin
+  @Yqstab status    @w- Show detailed status
+  @Yqstab refresh   @w- Refresh quickstab state from slist
+  @Yqstab debug     @w- Toggle debug mode
+  @Yqstab reload    @w- Reload plugin
+  @Yqstab help      @w- Show this help
 
 @WBehavior:
   When quickstab is active and you backstab:

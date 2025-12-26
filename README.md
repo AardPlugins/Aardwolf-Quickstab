@@ -29,13 +29,13 @@ This plugin tracks backstab results and only sends spiral when appropriate:
 
 | Command | Description |
 |---------|-------------|
-| `qs` | Show status |
-| `qs on` | Enable plugin |
-| `qs off` | Disable plugin |
-| `qs refresh` | Refresh quickstab state from slist |
-| `qs debug` | Toggle debug output |
-| `qs reload` | Reload plugin |
-| `qs help` | Show help |
+| `qstab` | Show status |
+| `qstab on` | Enable plugin |
+| `qstab off` | Disable plugin |
+| `qstab refresh` | Refresh quickstab state from slist |
+| `qstab debug` | Toggle debug output |
+| `qstab reload` | Reload plugin |
+| `qstab help` | Show help |
 
 ## How It Works
 
