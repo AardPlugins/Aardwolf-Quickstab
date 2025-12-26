@@ -96,6 +96,9 @@ function timer_init_plugin(timer_name)
 
     -- Query slist to check if quickstab is already active
     refresh_quickstab_state()
+
+    -- Create the status window
+    create_window()
 end
 
 -- Spiral timer - fires spiral after delay if mob didn't die
@@ -164,9 +167,10 @@ function trigger_backstab_failed(name, line, wildcards)
     on_backstab_failed()
 end
 
-function trigger_backstab_refused(name, line, wildcards)
-    debug_log("Trigger: Second backstab refused - " .. line)
-    on_backstab_refused()
+-- Second backstab refused - always-on version that works without quickstab active
+function trigger_backstab_refused_always(name, line, wildcards)
+    debug_log("Trigger: Second backstab refused (always-on) - " .. line)
+    on_backstab_refused_always()
 end
 
 -- =============================================================================
@@ -197,6 +201,12 @@ function alias_quickstab(name, line, wildcards)
         cmd_enable()
     elseif cmd == "off" then
         cmd_disable()
+    elseif cmd == "window" then
+        cmd_window()
+    elseif cmd == "delay" then
+        cmd_delay(parts[2])
+    elseif cmd == "reset" then
+        cmd_reset_window()
     elseif cmd == "debug" then
         cmd_debug()
     elseif cmd == "refresh" then
@@ -219,6 +229,9 @@ function cmd_help()
   @Yqstab           @w- Show status
   @Yqstab on        @w- Enable plugin
   @Yqstab off       @w- Disable plugin
+  @Yqstab window    @w- Toggle status window
+  @Yqstab delay [ms]@w- Set/show spiral delay (0-1000ms)
+  @Yqstab reset     @w- Reset window position
   @Yqstab status    @w- Show detailed status
   @Yqstab refresh   @w- Refresh quickstab state from slist
   @Yqstab debug     @w- Toggle debug mode
@@ -227,27 +240,33 @@ function cmd_help()
 
 @WBehavior:
   When quickstab is active and you backstab:
-  - If mob survives (hit or miss): spiral fires after short delay
+  - If mob survives (hit or miss): spiral fires after delay
   - If mob dies: spiral is canceled (save for next mob)
-  - If "second backstab refused": spiral fires immediately
-  - If other failures: spiral fires only if in combat]])
+  - If "second backstab refused": spiral fires immediately (even without QS)
+  - If other failures: spiral fires only if in combat
+  - 3 second cooldown prevents double-spiral]])
 end
 
 function cmd_status()
     local plugin_status = plugin_enabled and "@GEnabled" or "@RDisabled"
     local qs_status = quickstab_active and "@GActive" or "@RInactive"
     local debug_status = debug_enabled and "@GYes" or "@RNo"
+    local window_status = show_window == 1 and "@GOn" or "@ROff"
 
     Message(string.format([[@WQuickStab Plugin v%s
 
   @WPlugin:     @w(%s@w)
   @WQuickstab:  @w(%s@w)
   @WState:      @w(@Y%s@w)
+  @WDelay:      @w(@Y%dms@w)
+  @WWindow:     @w(%s@w)
   @WDebug:      @w(%s@w)]],
         PLUGIN_VERSION,
         plugin_status,
         qs_status,
         current_state,
+        SPIRAL_DELAY_MS,
+        window_status,
         debug_status))
 end
 
@@ -255,6 +274,7 @@ function cmd_enable()
     plugin_enabled = true
     save_state()
     update_trigger_groups()
+    draw_window()
     info("Plugin ENABLED")
 end
 
@@ -262,6 +282,7 @@ function cmd_disable()
     plugin_enabled = false
     save_state()
     update_trigger_groups()
+    draw_window()
 
     -- Cancel any pending spiral
     if current_state == QS_STATE.PENDING_SPIRAL then
@@ -269,6 +290,32 @@ function cmd_disable()
     end
 
     info("Plugin DISABLED")
+end
+
+function cmd_window()
+    toggle_window()
+end
+
+function cmd_delay(delay_str)
+    if delay_str == nil or delay_str == "" then
+        info("Current spiral delay: " .. SPIRAL_DELAY_MS .. "ms (valid range: 0-1000)")
+        return
+    end
+
+    local delay = tonumber(delay_str)
+    if delay == nil or delay < 0 or delay > 1000 then
+        info("Invalid delay. Valid range: 0-1000ms")
+        return
+    end
+
+    SPIRAL_DELAY_MS = delay
+    save_state()
+    draw_window()
+    info("Spiral delay set to " .. delay .. "ms")
+end
+
+function cmd_reset_window()
+    reset_window()
 end
 
 function cmd_debug()

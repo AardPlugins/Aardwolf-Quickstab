@@ -35,12 +35,24 @@ function set_state(new_state)
     else
         EnableTriggerGroup("quickstab_death", false)
     end
+
+    -- Update window display
+    draw_window()
 end
 
 -- =============================================================================
 -- Spiral Execution
 -- =============================================================================
 function execute_spiral()
+    -- Cooldown check to prevent double-spiral
+    local now = os.clock() * 1000
+    if (now - last_spiral_time) < SPIRAL_COOLDOWN_MS then
+        debug_log("Spiral on cooldown (" .. math.floor(SPIRAL_COOLDOWN_MS - (now - last_spiral_time)) .. "ms remaining), skipping")
+        set_state(QS_STATE.IDLE)
+        return
+    end
+
+    last_spiral_time = now
     debug_log("Executing spiral")
     Send("spiral")
     set_state(QS_STATE.IDLE)
@@ -100,6 +112,7 @@ function on_quickstab_activated(duration)
     quickstab_active = true
     info("Quickstab is now ACTIVE (" .. duration .. "s)")
     update_trigger_groups()
+    draw_window()
 end
 
 -- Quickstab buff deactivated
@@ -107,6 +120,7 @@ function on_quickstab_deactivated()
     quickstab_active = false
     info("Quickstab has WORN OFF")
     update_trigger_groups()
+    draw_window()
 
     -- Cancel any pending spiral
     if current_state == QS_STATE.PENDING_SPIRAL then
@@ -135,19 +149,25 @@ function on_backstab_executed()
     schedule_spiral()
 end
 
--- Second backstab refused - spiral immediately (can't bs again)
-function on_backstab_refused()
-    if not quickstab_active or not plugin_enabled then
-        debug_log("Ignoring refused backstab, plugin/quickstab not active")
+-- Second backstab refused - works even without quickstab active
+-- Only spirals if currently in combat
+function on_backstab_refused_always()
+    if not plugin_enabled then
+        debug_log("Plugin disabled, ignoring refused backstab")
         return
     end
 
-    debug_log("Second backstab refused, spiraling immediately")
-
-    -- Cancel any existing timer and spiral now
+    -- Cancel any pending spiral timer first
     DeleteTimer(spiral_timer_id)
-    set_state(QS_STATE.IDLE)
-    execute_spiral()
+
+    -- Only spiral if we're in combat
+    if is_fighting() then
+        debug_log("Second backstab refused while fighting, spiraling")
+        set_state(QS_STATE.IDLE)
+        execute_spiral()
+    else
+        debug_log("Second backstab refused but not fighting, no spiral")
+    end
 end
 
 -- Backstab failed (target not here, too paranoid, etc.)
@@ -247,4 +267,84 @@ end
 function save_state()
     SetVariable(VAR_ENABLED, tostring(plugin_enabled))
     SetVariable(VAR_DEBUG, tostring(debug_enabled))
+    SetVariable(VAR_SHOW_WINDOW, tostring(show_window))
+    SetVariable(VAR_SPIRAL_DELAY, tostring(SPIRAL_DELAY_MS))
+end
+
+-- =============================================================================
+-- Status Window
+-- =============================================================================
+qs_window = nil
+
+function create_window()
+    if show_window == 0 then
+        return
+    end
+
+    qs_window = ThemedTextWindow(
+        GetPluginID(),                                    -- id
+        (GetInfo(281) - WINDOW_WIDTH) / 2,               -- center horizontally
+        50,                                               -- near top of screen
+        WINDOW_WIDTH,                                     -- width
+        WINDOW_HEIGHT,                                    -- height
+        "QuickStab",                                      -- title
+        "center",                                         -- title alignment
+        false,                                            -- not closeable (no X button)
+        true,                                             -- resizable
+        false,                                            -- not scrollable
+        false,                                            -- not selectable
+        false,                                            -- not copyable
+        false,                                            -- no URL hyperlinks
+        true,                                             -- autowrap
+        nil,                                              -- default title font
+        6,                                                -- title font size
+        GetAlphaOption("output_font_name"),              -- text font
+        GetOption("output_font_height"),                 -- text font size
+        3,                                                -- max lines
+        nil,                                              -- default padding
+        false,                                            -- show immediately
+        false                                             -- not transparent
+    )
+    qs_window:bring_to_front()
+    draw_window()
+end
+
+function draw_window()
+    if show_window == 0 or qs_window == nil then
+        return
+    end
+
+    qs_window:clear(false)
+
+    local qs_color = quickstab_active and "@G" or "@R"
+    local text = string.format("%sQS: %s", qs_color, quickstab_active and "Active" or "Inactive")
+
+    qs_window:add_text(text, false)
+    qs_window:show()
+end
+
+function toggle_window()
+    if show_window == 1 then
+        show_window = 0
+        if qs_window then
+            qs_window:delete()
+            qs_window = nil
+        end
+        info("Status window DISABLED")
+    else
+        show_window = 1
+        create_window()
+        info("Status window ENABLED")
+    end
+    SetVariable(VAR_SHOW_WINDOW, tostring(show_window))
+end
+
+function reset_window()
+    if show_window == 0 or qs_window == nil then
+        info("Window is not enabled")
+        return
+    end
+    qs_window:reset()
+    qs_window:bring_to_front()
+    info("Window position reset")
 end

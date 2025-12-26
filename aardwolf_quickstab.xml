@@ -165,22 +165,26 @@
     </trigger>
 
     <!-- ================================================================
-         BACKSTAB FAILURE TRIGGERS (enabled when quickstab active)
+         ALWAYS-ON TRIGGERS (enabled regardless of quickstab status)
          ================================================================ -->
 
-    <!-- Second backstab refused - spiral immediately -->
+    <!-- Second backstab refused - spiral immediately (works without quickstab) -->
     <trigger
-        name="trigger_bs_fail_second"
-        group="quickstab_failures"
-        enabled="n"
+        name="trigger_bs_refused_always"
+        group="quickstab_always"
+        enabled="y"
         match="^.+ refuses to be fooled by a second backstab\.$"
         regexp="y"
         omit_from_output="n"
         keep_evaluating="y"
-        sequence="100"
+        sequence="50"
         send_to="12"
-        script="trigger_backstab_refused">
+        script="trigger_backstab_refused_always">
     </trigger>
+
+    <!-- ================================================================
+         BACKSTAB FAILURE TRIGGERS (enabled when quickstab active)
+         ================================================================ -->
 
     <!-- Target not here - check if fighting -->
     <trigger

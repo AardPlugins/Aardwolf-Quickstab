@@ -1,23 +1,27 @@
 # Aardwolf QuickStab Plugin
 
-MUSHclient plugin that automatically uses spiral after backstab when the quickstab skill is active.
+Automatically uses spiral after backstab when the quickstab skill is active.
 
-## Problem
+## Why?
 
-When quickstab (Sn: 601) is active, you can use spiral in the same round as backstab. However, if backstab kills the mob, using spiral wastes the opportunity to backstab the next mob.
+When quickstab (Sn: 601) is active, you can use spiral in the same round as backstab. But if backstab kills the mob, spiraling wastes the opportunity to backstab the next mob immediately.
 
-## Solution
+This plugin solves that by detecting mob death and canceling spiral when appropriate.
 
-This plugin tracks backstab results and only sends spiral when appropriate:
+## Behavior
 
 | Scenario | Action |
 |----------|--------|
-| Backstab hits, mob survives | Spiral fires after short delay |
-| Backstab misses | Spiral fires after short delay |
-| Backstab kills mob | Spiral is canceled |
-| "Refuses second backstab" | Spiral fires immediately |
-| Other failures (while fighting) | Spiral fires |
-| Other failures (not fighting) | No spiral |
+| Backstab hits, mob survives | Spiral fires after delay |
+| Backstab misses | Spiral fires after delay |
+| Backstab kills mob | Spiral canceled |
+| "Refuses second backstab" | Spiral fires immediately* |
+| Other failures (in combat) | Spiral fires |
+| Other failures (not in combat) | No spiral |
+
+*Works even without quickstab active*
+
+A 3-second cooldown prevents accidental double-spiral.
 
 ## Installation
 
@@ -30,32 +34,17 @@ This plugin tracks backstab results and only sends spiral when appropriate:
 | Command | Description |
 |---------|-------------|
 | `qstab` | Show status |
-| `qstab on` | Enable plugin |
-| `qstab off` | Disable plugin |
-| `qstab refresh` | Refresh quickstab state from slist |
+| `qstab on/off` | Enable/disable plugin |
+| `qstab window` | Toggle status window |
+| `qstab delay [ms]` | Set/show spiral delay (0-1000ms, default 300) |
+| `qstab reset` | Reset window position |
+| `qstab refresh` | Re-query quickstab state from slist |
 | `qstab debug` | Toggle debug output |
 | `qstab reload` | Reload plugin |
-| `qstab help` | Show help |
 
-## How It Works
+## Status Window
 
-1. Plugin enables `TELOPT_SPELLUP` to receive `{affon}` / `{affoff}` tags
-2. On connect, queries `slist affected` to check if quickstab is already active
-3. When `{affon}601` is received, enables backstab detection triggers
-4. When backstab executes, starts a 150ms timer before sending spiral
-5. If a death message is detected during that window, cancels the spiral
-6. When `{affoff}601` is received, disables backstab triggers
-
-## Files
-
-```
-aardwolf_quickstab/
-├── aardwolf_quickstab.xml           # Plugin definition
-├── aardwolf_quickstab_init.lua      # Bootstrap, constants, utilities
-├── aardwolf_quickstab_core.lua      # State machine, event handlers
-├── aardwolf_quickstab_handlers.lua  # Trigger/alias callbacks
-└── README.md
-```
+A small status window shows whether quickstab is active. Toggle with `qstab window`.
 
 ## Requirements
 
@@ -66,59 +55,23 @@ aardwolf_quickstab/
 ## Troubleshooting
 
 **Spiral not firing:**
-- Check `qs status` to verify plugin is enabled and quickstab is active
-- Use `qs debug` to see detailed logging
-- Use `qs refresh` to re-query quickstab state
+- Run `qstab` to check plugin status
+- Use `qstab debug` for detailed logging
+- Use `qstab refresh` to re-query quickstab state
 
-**Spiral firing when it shouldn't:**
-- Check if death message pattern is missing from triggers
-- Enable debug mode to see what's being detected
+**Spiral firing after mob dies:**
+- Increase delay with `qstab delay 400` (or higher)
+- This gives more time for death detection
 
 **Plugin not detecting quickstab:**
-- Ensure spellup tags are enabled (plugin does this automatically)
-- Try `qs refresh` to manually query slist
+- Run `qstab refresh` to manually query slist
+- Check that quickstab skill is active in-game
 
-## Debug Output
+## How It Works
 
-Enable with `qs debug`. Example output for a successful backstab + spiral:
-
-```
-[QS Debug] Trigger: Backstab executed - *[5] Your backstab does UNBELIEVABLE things to a mob! [1234]
-[QS Debug] Backstab executed, scheduling spiral
-[QS Debug] Scheduling spiral in 150ms
-[QS Debug] State: idle -> pending_spiral
-[QS Debug] Spiral timer created successfully, waiting for death or timeout
-[QS Debug] Spiral timer fired
-[QS Debug] Executing spiral
-[QS Debug] State: pending_spiral -> idle
-```
-
-Example output when backstab kills the mob (spiral canceled):
-
-```
-[QS Debug] Trigger: Backstab executed - *[5] Your backstab does UNBELIEVABLE things to a mob! [5678]
-[QS Debug] Backstab executed, scheduling spiral
-[QS Debug] Scheduling spiral in 150ms
-[QS Debug] State: idle -> pending_spiral
-[QS Debug] Spiral timer created successfully, waiting for death or timeout
-[QS Debug] Trigger: Death message - A mob lets out a final rasp as its vital organs are pierced. It is DEAD!
-[QS Debug] Death detected, current state: pending_spiral
-[QS Debug] Canceling spiral: mob died from backstab
-[QS Debug] State: pending_spiral -> idle
-```
-
-Example output on connect:
-
-```
-[QS Debug] OnPluginConnect called
-[QS Debug] TELOPT_SPELLUP enabled
-[QS Debug] Backstab triggers: disabled
-[QS Debug] Connected - spellup telnet enabled, init timer started
-[QS Debug] Valid game state detected (3), querying slist
-[QS Debug] Refreshing quickstab state via slist...
-[QS Debug] Trigger: {spellheaders} received
-[QS Debug] slist capture started
-[QS Debug] Trigger: {/spellheaders} received
-[QS Debug] slist capture complete
-[QS Debug] Quickstab not found in slist affected (not active)
-```
+1. On connect, enables `TELOPT_SPELLUP` for `{affon}/{affoff}` tags
+2. Queries `slist affected` to detect if quickstab is already active
+3. When `{affon}601` received, enables backstab detection
+4. On backstab, waits configurable delay (default 300ms) before spiral
+5. If death message detected during delay, cancels spiral
+6. When `{affoff}601` received, disables backstab triggers

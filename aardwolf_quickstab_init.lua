@@ -7,6 +7,7 @@
 -- =============================================================================
 dofile(GetInfo(60) .. "aardwolf_colors.lua")
 require "wait"
+require "themed_miniwindows"
 
 -- =============================================================================
 -- Constants
@@ -18,7 +19,12 @@ QUICKSTAB_SKILL_ID = 601
 
 -- Timing configuration (milliseconds)
 -- Short delay to allow death detection before spiral fires
-SPIRAL_DELAY_MS = 150
+-- Default increased to 300ms, configurable via qstab delay
+VAR_SPIRAL_DELAY = "qs_spiral_delay"
+SPIRAL_DELAY_MS = tonumber(GetVariable(VAR_SPIRAL_DELAY)) or 300
+
+-- Cooldown to prevent double-spiral
+SPIRAL_COOLDOWN_MS = 3000
 
 -- Character state constants (from GMCP char.status.state)
 CHAR_STATE_STANDING = 3
@@ -38,11 +44,20 @@ VALID_GAME_STATES = {
 plugin_id_gmcp_handler = "3e7dedbe37e44942dd46d264"
 
 -- =============================================================================
+-- Window Configuration
+-- =============================================================================
+VAR_SHOW_WINDOW = "qs_show_window"
+show_window = tonumber(GetVariable(VAR_SHOW_WINDOW)) or 1  -- Default ON
+WINDOW_WIDTH = 200
+WINDOW_HEIGHT = 60
+
+-- =============================================================================
 -- Shared State (global for cross-file access)
 -- =============================================================================
 debug_enabled = false
 plugin_enabled = true
 quickstab_active = false
+last_spiral_time = 0  -- For cooldown tracking
 
 -- =============================================================================
 -- GMCP Helper (used by all modules)
